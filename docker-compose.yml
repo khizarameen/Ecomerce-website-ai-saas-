@@ -1,0 +1,78 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-storehub}
+      POSTGRES_USER: ${POSTGRES_USER:-storehub}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-storehub_pass}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-storehub} -d ${POSTGRES_DB:-storehub}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - storehub_net
+
+  backend:
+    build:
+      context: ./myproject
+      dockerfile: Dockerfile
+      args:
+        INSTALL_CHROMA: ${INSTALL_CHROMA:-false}
+    restart: unless-stopped
+    env_file:
+      - path: ./myproject/.env
+        format: raw
+        required: false
+      - path: ./.env
+        required: false
+    environment:
+      DEBUG: ${DEBUG:-False}
+      ALLOWED_HOSTS: "*"
+      DATABASE_URL: postgresql://${POSTGRES_USER:-storehub}:${POSTGRES_PASSWORD:-storehub_pass}@db:5432/${POSTGRES_DB:-storehub}?sslmode=disable
+    volumes:
+      - media_data:/app/media
+      - chroma_data:/app/chroma_db
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/health/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    networks:
+      - storehub_net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_GOOGLE_CLIENT_ID: ${VITE_GOOGLE_CLIENT_ID:-}
+        VITE_STRIPE_PUBLIC_KEY: ${VITE_STRIPE_PUBLIC_KEY:-}
+    restart: unless-stopped
+    volumes:
+      - media_data:/usr/share/nginx/media:ro
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - storehub_net
+
+volumes:
+  postgres_data:
+  media_data:
+  chroma_data:
+
+networks:
+  storehub_net:
+    driver: bridge

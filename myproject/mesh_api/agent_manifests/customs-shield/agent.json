@@ -1,0 +1,20 @@
+{
+  "agent_id": "customs-shield",
+  "name": "Customs, HS-Code & Hazmat Compliance Agent",
+  "version": "2.2.0",
+  "protocol": "a2a/v1",
+  "node_key": "customs_shield",
+  "endpoint": "/api/agents/customs-shield",
+  "status": "ONLINE",
+  "role": "Classifies Harmonized System (HS) tariff codes, calculates import duty exemptions, verifies UN3481 lithium/air safety, and issues GREEN-LANE PRE-CLEARED customs certificates.",
+  "capabilities": [
+    "hs_code_classification",
+    "import_duty_calculation",
+    "hazmat_lithium_clearance"
+  ],
+  "compliance_standards": [
+    "WCO_HS_2026",
+    "IATA_UN3481_PI967",
+    "AEO_GREEN_LANE_PRECLEARANCE"
+  ]
+}

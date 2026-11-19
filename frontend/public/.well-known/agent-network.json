@@ -1,0 +1,250 @@
+{
+  "protocol": "open-agentic-web/1.0",
+  "standard": "MIT-NANDA / Open-Agentic-Web / Mozilla-Otari",
+  "network_id": "storehub-anti-rto-commerce-mesh",
+  "name": "StoreHub Anti-RTO & Universal Commerce Agent Network",
+  "description": "Open Agentic Web node for product catalog concierge, SupplyShield A2A price/customs negotiation, anti-RTO cancelled-parcel Next-Customer rerouting, and COD fraud risk gatekeeping.",
+  "version": "1.0.0",
+  "origin": "http://localhost:3000",
+  "runtime_url": "/agent-runtime.js",
+  "manifest_urls": [
+    "/.well-known/agent-network.json",
+    "/agent-network.json"
+  ],
+  "agents": [
+    {
+      "id": "buyer_catalog_concierge",
+      "name": "Buyer Catalog Concierge",
+      "description": "Catalog discovery, price comparison, buyer review lookup, and live stock risk analysis across StoreHub sellers.",
+      "capabilities": [
+        "catalog_discovery",
+        "price_comparison",
+        "live_stock_risk_analysis",
+        "supply_chain_hub_deal_discovery"
+      ],
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Product search query or buying goal"
+          },
+          "max_price": {
+            "type": "number",
+            "description": "Optional budget ceiling in USD"
+          },
+          "category": {
+            "type": "string",
+            "description": "Optional category filter"
+          }
+        },
+        "required": [
+          "query"
+        ]
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "products": {
+            "type": "array"
+          },
+          "supply_chain_hub_deals": {
+            "type": "array"
+          },
+          "stock_summary": {
+            "type": "string"
+          }
+        }
+      },
+      "execution_mode": "browser-runtime",
+      "fallback_mode": "backend-mesh-fallback",
+      "endpoint": "/api/open-agent/invoke/"
+    },
+    {
+      "id": "supplyshield_haggle_agent",
+      "name": "SupplyShield Haggle & Customs Agent",
+      "description": "Cross-site A2A 2-round price negotiation, WCO HS-code & hazmat validation, and cryptographic Escrow PO generation.",
+      "capabilities": [
+        "a2a_price_negotiation",
+        "customs_hs_code_validation",
+        "escrow_po_generation",
+        "sla_route_optimization"
+      ],
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "product_name": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "integer",
+            "default": 1
+          },
+          "target_price": {
+            "type": "number"
+          },
+          "max_budget": {
+            "type": "number"
+          },
+          "category": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "product_name"
+        ]
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "original_price_usd": {
+            "type": "number"
+          },
+          "negotiated_price_usd": {
+            "type": "number"
+          },
+          "rebate_pct": {
+            "type": "number"
+          },
+          "hs_code": {
+            "type": "string"
+          },
+          "po_hash": {
+            "type": "string"
+          },
+          "dialogue": {
+            "type": "array"
+          }
+        }
+      },
+      "execution_mode": "browser-runtime",
+      "fallback_mode": "backend-mesh-fallback",
+      "endpoint": "/api/open-agent/invoke/"
+    },
+    {
+      "id": "anti_rto_rerouter_agent",
+      "name": "Anti-RTO Cancelled Deal Rerouter Agent",
+      "description": "Detects cancelled or refused in-transit parcels and negotiates discounted Next-Customer same-city hub rescue deals.",
+      "capabilities": [
+        "cancelled_parcel_detection",
+        "next_customer_matching",
+        "anti_rto_discount_haggle",
+        "return_freight_recovery"
+      ],
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "product_title": {
+            "type": "string"
+          },
+          "city": {
+            "type": "string",
+            "default": "Karachi"
+          },
+          "buyer_offer_price": {
+            "type": "number"
+          },
+          "max_discount_pct": {
+            "type": "number",
+            "default": 15
+          }
+        }
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "deal_card": {
+            "type": "object"
+          },
+          "agreed_price_usd": {
+            "type": "number"
+          },
+          "discount_pct": {
+            "type": "number"
+          },
+          "freight_saved_usd": {
+            "type": "number"
+          },
+          "a2a_transcript": {
+            "type": "array"
+          }
+        }
+      },
+      "execution_mode": "browser-runtime",
+      "fallback_mode": "backend-mesh-fallback",
+      "endpoint": "/api/open-agent/invoke/"
+    },
+    {
+      "id": "cod_risk_gatekeeper_agent",
+      "name": "COD Risk Gatekeeper Agent",
+      "description": "Evaluates incoming buyer Cash-on-Delivery orders for prank numbers, incomplete addresses, and fake COD wave risk before dispatch.",
+      "capabilities": [
+        "cod_fraud_scoring",
+        "address_completeness_check",
+        "pre_dispatch_rto_prevention"
+      ],
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "phone": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "city": {
+            "type": "string"
+          },
+          "payment_method": {
+            "type": "string",
+            "default": "cod"
+          },
+          "order_value": {
+            "type": "number",
+            "default": 45.0
+          }
+        }
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "risk_score": {
+            "type": "integer"
+          },
+          "decision": {
+            "type": "string"
+          },
+          "risk_factors": {
+            "type": "array"
+          },
+          "freight_saved_usd": {
+            "type": "number"
+          }
+        }
+      },
+      "execution_mode": "browser-runtime",
+      "fallback_mode": "backend-mesh-fallback",
+      "endpoint": "/api/open-agent/invoke/"
+    }
+  ],
+  "interoperability": {
+    "invoke_endpoint": "/api/open-agent/invoke/",
+    "protocol_bindings": [
+      "open-agentic-web/1.0",
+      "json-rpc-2.0",
+      "a2a/v1"
+    ],
+    "cors_enabled": true,
+    "allow_external_discovery": true,
+    "discovery_paths": [
+      "/.well-known/agent-network.json",
+      "/agent-network.json"
+    ],
+    "supported_browser_providers": [
+      "storehub-fallback",
+      "mozilla-otari",
+      "openai-compatible",
+      "google-gemini"
+    ]
+  }
+}

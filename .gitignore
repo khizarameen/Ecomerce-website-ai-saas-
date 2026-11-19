@@ -1,0 +1,45 @@
+# Python / Django / Virtualenvs
+.venv/
+venv/
+env/
+ENV/
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+
+# Environment Variables & Secrets (NEVER commit real keys)
+.env
+**/.env
+.env.local
+.env.*.local
+!.env.docker.example
+
+# Databases, Logs, Vector Stores & Runtime Media
+*.sqlite3
+*.sqlite3-journal
+myproject/db.sqlite3
+myproject/logs/
+logs/
+*.log
+myproject/media/
+myproject/staticfiles/
+myproject/chroma_db/
+chroma_db/
+
+# Node / Vite / Frontend Build Artifacts
+node_modules/
+frontend/node_modules/
+frontend/dist/
+dist/
+npm-debug.log*
+yarn-debug.log*
+
+# Deployment / IDE / OS
+.vercel/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,19 @@
+{
+  "agent_id": "budget-guard",
+  "name": "FinOps & Escrow Guard Node",
+  "version": "1.0.9",
+  "protocol": "a2a/v1",
+  "role": "Autonomous Procurement FinOps Auditor & Escrow Signer",
+  "endpoint": "/api/agents/budget-guard",
+  "capabilities": [
+    "total_landed_cost_verification",
+    "budget_cap_enforcement",
+    "savings_calculation",
+    "sha256_escrow_po_generation"
+  ],
+  "policies": {
+    "require_sla_compliance": true,
+    "require_budget_compliance": true,
+    "escrow_network": "SupplyShield-Settlement-Ledger"
+  }
+}

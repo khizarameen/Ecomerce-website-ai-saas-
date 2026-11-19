@@ -1,0 +1,23 @@
+{
+  "agent_id": "risk-radar",
+  "name": "Risk & Weather Radar Node",
+  "version": "1.1.4",
+  "protocol": "a2a/v1",
+  "role": "Geopolitical, Port Strike & Severe Weather Telemetry Agent",
+  "endpoint": "/api/agents/risk-radar",
+  "capabilities": [
+    "maritime_cyclone_tracking",
+    "port_labor_strike_alerts",
+    "route_risk_scoring",
+    "delay_projection"
+  ],
+  "telemetry_feeds": [
+    "NOAA-JTWC-Typhoon-Feed",
+    "Global-Port-Congestion-Index",
+    "APAC-Airspace-Notam-Stream"
+  ],
+  "thresholds": {
+    "critical_risk_score": 70,
+    "auto_reroute_on_sla_breach": true
+  }
+}

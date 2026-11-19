@@ -1,0 +1,29 @@
+{
+  "agent_id": "supplier-node",
+  "name": "Universal Supplier & Catalog Node",
+  "version": "2.0.0",
+  "protocol": "a2a/v1",
+  "role": "Universal Multi-Category Product Search, Vendor Quote & Failover Negotiator",
+  "endpoint": "/api/agents/supplier-node",
+  "capabilities": [
+    "django_store_db_search",
+    "global_market_catalog_synthesis",
+    "multi_vendor_quote_generation",
+    "lead_time_verification",
+    "dynamic_supplier_failover"
+  ],
+  "supported_categories": [
+    "All Store Categories",
+    "Electronics & Computing",
+    "Studio & Creator Gear",
+    "Office & Furniture",
+    "Solar & Clean Energy",
+    "Apparel & Footwear",
+    "Books & Home"
+  ],
+  "sla": {
+    "max_response_ms": 1200,
+    "llm_dynamic_quoting": true,
+    "deterministic_fallback": true
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "agent_id": "haggle-bot",
+  "name": "Autonomous A2A Price Bargaining Agent",
+  "version": "2.4.0",
+  "protocol": "a2a/v1",
+  "node_key": "haggle_bot",
+  "endpoint": "/api/agents/haggle-bot",
+  "status": "ONLINE",
+  "role": "Executes autonomous 2-round Agent-to-Agent (A2A) price bargaining and instant escrow rebate negotiation with backup and primary suppliers.",
+  "capabilities": [
+    "a2a_price_negotiation",
+    "escrow_instant_rebate",
+    "volume_discount_haggling"
+  ],
+  "negotiation_policy": {
+    "rounds": 2,
+    "rebate_range_pct": "8% - 14%",
+    "aggressive_target_pct": 12,
+    "settlement_mode": "INSTANT_ESCROW_REBATE"
+  }
+}

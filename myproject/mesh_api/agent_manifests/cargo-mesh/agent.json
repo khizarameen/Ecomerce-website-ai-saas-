@@ -1,0 +1,28 @@
+{
+  "agent_id": "cargo-mesh",
+  "name": "Logistics & Cargo Mesh Node",
+  "version": "1.3.0",
+  "protocol": "a2a/v1",
+  "role": "Multi-Modal Freight Optimizer & Air Charter Dispatcher",
+  "endpoint": "/api/agents/cargo-mesh",
+  "capabilities": [
+    "sea_freight_routing",
+    "priority_air_charter_upgrade",
+    "sla_transit_verification",
+    "customs_pre_clearance"
+  ],
+  "modes": [
+    {
+      "mode_id": "ground_sea",
+      "label": "Ground / Sea Freight",
+      "transit_days": 4.0,
+      "cost_usd": 1500
+    },
+    {
+      "mode_id": "priority_air_charter",
+      "label": "Priority Air Charter",
+      "transit_days": 1.5,
+      "cost_usd": 5500
+    }
+  ]
+}

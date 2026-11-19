@@ -18,15 +18,23 @@ const api = axios.create({
   },
 });
 
+const PUBLIC_AUTH_PATHS = ['/auth/login/', '/auth/register/', '/auth/google/'];
+
 // ============================================
 // ✅ REQUEST INTERCEPTOR - Add Token
 // ============================================
 api.interceptors.request.use(
   (config) => {
-    // Support both token formats
-    const token = localStorage.getItem('access_token') || localStorage.getItem('accessToken');
+    const reqUrl = String(config.url || '');
+    const isPublicAuth = PUBLIC_AUTH_PATHS.some((p) => reqUrl.includes(p));
+    // Support both token formats on authenticated routes only
+    const token = !isPublicAuth
+      ? localStorage.getItem('access_token') || localStorage.getItem('accessToken')
+      : null;
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+    } else if (isPublicAuth && config.headers?.Authorization) {
+      delete config.headers.Authorization;
     }
     
     console.log('🔑 API Request:', {
@@ -61,9 +69,9 @@ api.interceptors.response.use(
     
     // ✅ Handle 401 Unauthorized
     if (error.response?.status === 401) {
-      // Don't redirect if already on login page or trying to login
-      if (originalRequest.url.includes('/auth/login/') || 
-          originalRequest.url.includes('/auth/register/')) {
+      // Don't redirect if already on login page or trying public auth
+      const reqUrl = String(originalRequest?.url || '');
+      if (PUBLIC_AUTH_PATHS.some((p) => reqUrl.includes(p))) {
         return Promise.reject(error);
       }
       

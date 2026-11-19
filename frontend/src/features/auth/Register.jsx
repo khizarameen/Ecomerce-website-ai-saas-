@@ -147,6 +147,7 @@ const Register = () => {
             </p>
             <GoogleSignInButton
               role={formData.user_type}
+              mode="register"
               onAuthenticated={(res) => navigate(res.isSeller ? '/seller/dashboard' : '/home')}
             />
           </div>

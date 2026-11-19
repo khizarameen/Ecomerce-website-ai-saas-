@@ -414,13 +414,70 @@ class LoginView(generics.GenericAPIView):
             }, status=status.HTTP_400_BAD_REQUEST)
 
 
+def _verify_google_identity(credential: str, access_token: str, client_id: str) -> dict:
+    """Verify a Google ID token or access token, with clock-skew & tokeninfo fallback."""
+    import requests as http_requests
+    from google.auth.transport import requests as google_requests
+    from google.oauth2 import id_token as google_id_token
+
+    if credential:
+        try:
+            try:
+                return google_id_token.verify_oauth2_token(
+                    credential,
+                    google_requests.Request(),
+                    client_id,
+                    clock_skew_in_seconds=60,
+                )
+            except TypeError:
+                return google_id_token.verify_oauth2_token(
+                    credential,
+                    google_requests.Request(),
+                    client_id,
+                )
+        except ValueError as local_err:
+            # Fallback to Google tokeninfo when local PC clock is skewed relative to Google's iat/exp
+            try:
+                info_resp = http_requests.get(
+                    'https://oauth2.googleapis.com/tokeninfo',
+                    params={'id_token': credential},
+                    timeout=10,
+                )
+                if info_resp.ok:
+                    info = info_resp.json()
+                    aud = info.get('aud') or info.get('azp') or ''
+                    if aud == client_id and str(info.get('email_verified', 'true')).lower() == 'true':
+                        return info
+            except Exception as ti_err:
+                logger.warning(f"Google tokeninfo fallback failed: {ti_err}")
+            if not access_token:
+                raise ValueError(f"Invalid Google ID token ({local_err})")
+
+    if access_token:
+        ui_resp = http_requests.get(
+            'https://www.googleapis.com/oauth2/v3/userinfo',
+            headers={'Authorization': f'Bearer {access_token}'},
+            timeout=10,
+        )
+        if not ui_resp.ok:
+            raise ValueError('Failed to verify Google user profile.')
+        info = ui_resp.json()
+        if info.get('email'):
+            return info
+
+    raise ValueError('Google credential token is required.')
+
+
 class GoogleAuthView(generics.GenericAPIView):
-    """Sign in or register a Buyer or Seller account using Google OAuth."""
+    """Sign in or register a Buyer or Seller account using Google OAuth (ID token or auth code)."""
+    authentication_classes = []
     permission_classes = [AllowAny]
 
     def post(self, request, *args, **kwargs):
         credential = (request.data.get('credential') or request.data.get('id_token') or '').strip()
         auth_code = (request.data.get('code') or '').strip()
+        access_token = (request.data.get('access_token') or '').strip()
+        auth_mode = str(request.data.get('mode') or 'login').strip().lower()
         raw_role = str(request.data.get('user_type') or '').strip().lower()
         explicit_role = raw_role in ('buyer', 'seller')
         requested_role = 'seller' if raw_role == 'seller' else 'buyer'
@@ -435,8 +492,6 @@ class GoogleAuthView(generics.GenericAPIView):
 
         try:
             import requests as http_requests
-            from google.auth.transport import requests as google_requests
-            from google.oauth2 import id_token as google_id_token
 
             if auth_code and not credential:
                 if not client_secret:
@@ -456,33 +511,32 @@ class GoogleAuthView(generics.GenericAPIView):
                     timeout=10,
                 )
                 token_json = token_resp.json()
-                if not token_resp.ok or not token_json.get('id_token'):
+                if not token_resp.ok or (not token_json.get('id_token') and not token_json.get('access_token')):
                     return Response(
                         {'success': False, 'error': token_json.get('error_description') or 'Google code exchange failed.'},
                         status=status.HTTP_400_BAD_REQUEST,
                     )
-                credential = token_json['id_token']
+                credential = (token_json.get('id_token') or '').strip()
+                access_token = (token_json.get('access_token') or access_token).strip()
 
-            if not credential:
+            if not credential and not access_token:
                 return Response(
                     {'success': False, 'error': 'Google credential token is required.'},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            idinfo = google_id_token.verify_oauth2_token(
-                credential,
-                google_requests.Request(),
-                client_id,
-            )
+            idinfo = _verify_google_identity(credential, access_token, client_id)
             email = (idinfo.get('email') or '').strip().lower()
-            if not email or not idinfo.get('email_verified', True):
+            verified_flag = str(idinfo.get('email_verified', 'true')).lower() == 'true'
+            if not email or not verified_flag:
                 return Response(
                     {'success': False, 'error': 'Verified Google email is required.'},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            first_name = (idinfo.get('given_name') or '').strip()
-            last_name = (idinfo.get('family_name') or '').strip()
+            full_name = (idinfo.get('name') or '').strip()
+            first_name = (idinfo.get('given_name') or (full_name.split(' ', 1)[0] if full_name else '')).strip()
+            last_name = (idinfo.get('family_name') or (full_name.split(' ', 1)[1] if ' ' in full_name else '')).strip()
 
             with transaction.atomic():
                 user = User.objects.filter(email__iexact=email).first()
@@ -498,13 +552,13 @@ class GoogleAuthView(generics.GenericAPIView):
                     elif Seller.objects.filter(user=user).exists():
                         existing_role = 'seller'
 
-                    if explicit_role and requested_role != existing_role:
+                    if auth_mode == 'register' and explicit_role and requested_role != existing_role:
                         return Response(
                             {
                                 'success': False,
                                 'error': (
                                     f'This Google email ({email}) is already registered as a '
-                                    f'{existing_role.title()} account. Please continue as {existing_role.title()} '
+                                    f'{existing_role.title()} account. Please sign in as {existing_role.title()} '
                                     f'or use a different Google email for {requested_role.title()}.'
                                 ),
                             },

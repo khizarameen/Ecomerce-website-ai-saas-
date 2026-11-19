@@ -105,7 +105,11 @@ const Login = () => {
               </button>
             </div>
           </div>
-          <GoogleSignInButton role={googleRole} />
+          <GoogleSignInButton
+            role={googleRole}
+            mode="login"
+            onAuthenticated={(res) => navigate(res.isSeller ? '/seller/dashboard' : '/home', { replace: true })}
+          />
         </section>
 
         {/* 1-Click Demo Accounts Panel */}

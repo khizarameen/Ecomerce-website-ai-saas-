@@ -1,5 +1,5 @@
 // src/context/AuthContext.jsx
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useCallback, useContext, useState, useEffect } from 'react';
 import { authAPI } from '../utils/api';
 import toast from 'react-hot-toast';
 
@@ -355,11 +355,19 @@ export const AuthProvider = ({ children }) => {
     return login(creds);
   };
 
-  const loginWithGoogle = async (credential, userType = 'buyer') => {
+  const loginWithGoogle = useCallback(async (authPayload, userType = 'buyer', mode = 'login') => {
     try {
+      const payload =
+        typeof authPayload === 'string'
+          ? { credential: authPayload }
+          : authPayload && typeof authPayload === 'object'
+          ? authPayload
+          : {};
+
       const response = await authAPI.googleLogin({
-        credential,
+        ...payload,
         user_type: userType,
+        mode,
       });
       const data = response.data || {};
       if (!data.success) {
@@ -405,7 +413,7 @@ export const AuthProvider = ({ children }) => {
       toast.error(msg);
       return { success: false, error: msg };
     }
-  };
+  }, []);
 
   const value = {
     user,

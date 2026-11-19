@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   ArchiveBoxArrowDownIcon,
   ArrowPathIcon,
+  CameraIcon,
   CheckCircleIcon,
   PencilSquareIcon,
   ShoppingBagIcon,
@@ -25,6 +26,22 @@ export default function CancelledDeals() {
   const [editTargetId, setEditTargetId] = useState(null);
   const [customNote, setCustomNote] = useState('');
   const [offeredPrice, setOfferedPrice] = useState('');
+  const [photoFiles, setPhotoFiles] = useState({});
+  const [photoPreviews, setPhotoPreviews] = useState({});
+  const [zoomPhotoUrl, setZoomPhotoUrl] = useState('');
+  const previewsRef = useRef({});
+
+  useEffect(() => {
+    previewsRef.current = photoPreviews;
+  }, [photoPreviews]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(previewsRef.current).forEach((url) => {
+        if (url) URL.revokeObjectURL(url);
+      });
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -52,16 +69,75 @@ export default function CancelledDeals() {
     return true;
   };
 
+  const clearDealPhoto = (dealId) => {
+    setPhotoPreviews((prev) => {
+      if (prev[dealId]) {
+        URL.revokeObjectURL(prev[dealId]);
+      }
+      const next = { ...prev };
+      delete next[dealId];
+      return next;
+    });
+    setPhotoFiles((prev) => {
+      const next = { ...prev };
+      delete next[dealId];
+      return next;
+    });
+  };
+
+  const handleSelectDealPhoto = (dealId, event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select a valid image file (JPG, PNG, or WebP).');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Photo size must be under 5 MB.');
+      return;
+    }
+    const previewUrl = URL.createObjectURL(file);
+    setPhotoPreviews((prev) => {
+      if (prev[dealId]) URL.revokeObjectURL(prev[dealId]);
+      return { ...prev, [dealId]: previewUrl };
+    });
+    setPhotoFiles((prev) => ({ ...prev, [dealId]: file }));
+  };
+
   const handleAction = async (dealId, optionType, extra = {}) => {
     if (!requireBuyerAuth()) return;
+    const selectedPhoto = photoFiles[dealId] || null;
+    if (optionType === 'UPLOAD_BUYER_PHOTO' && !selectedPhoto) {
+      toast.error('Please select a photo first to send for seller verification.');
+      return;
+    }
+
     setBusyKey(`${dealId}-${optionType}`);
     try {
-      const res = await sellerMeshAPI.actOnBuyerRescueDeal(dealId, {
-        option_type: optionType,
-        ...extra,
-      });
+      let payload;
+      if (selectedPhoto) {
+        payload = new FormData();
+        payload.append('option_type', optionType);
+        Object.entries(extra).forEach(([key, val]) => {
+          if (val !== undefined && val !== null && val !== '') {
+            payload.append(key, String(val));
+          }
+        });
+        payload.append('photo', selectedPhoto);
+      } else {
+        payload = {
+          option_type: optionType,
+          ...extra,
+        };
+      }
+
+      const res = await sellerMeshAPI.actOnBuyerRescueDeal(dealId, payload);
       setDeals(res.data?.deals || []);
       toast.success(res.data?.message || 'Request submitted!');
+      if (selectedPhoto) {
+        clearDealPhoto(dealId);
+      }
       if (optionType === 'REQUEST_EDIT_DISCOUNT') {
         setEditTargetId(null);
         setCustomNote('');
@@ -100,7 +176,8 @@ export default function CancelledDeals() {
               Here you can browse orders recently cancelled by buyers where sellers have offered special discounts or
               updated listings. Choose from 2 options:
               <strong className="text-emerald-300"> Claim a Discounted Deal / Request Custom Edit</strong> or{' '}
-              <strong className="text-sky-300">Request a Fresh Warehouse Backup Unit</strong>.
+              <strong className="text-sky-300">Request a Fresh Warehouse Backup Unit</strong> — and optionally attach a
+              photo for seller verification.
             </p>
           </div>
           <Link
@@ -127,6 +204,10 @@ export default function CancelledDeals() {
             const isClosed = deal.status === 'DEAL_CLOSED';
             const showEditBox = editTargetId === deal.id;
             const lastNotes = (deal.chat_history || []).slice(-2);
+            const selectedPhoto = photoFiles[deal.id];
+            const selectedPreview = photoPreviews[deal.id];
+            const photoStatus = deal.photo_verification_status || 'NOT_PROVIDED';
+            const photoConf = deal.photo_verification_result?.confidence_score;
 
             return (
               <article
@@ -180,6 +261,69 @@ export default function CancelledDeals() {
                     <p className="text-slate-600">{deal.ai_strategy_summary}</p>
                   </div>
 
+                  {/* Existing Product / Buyer Uploaded Photo */}
+                  {(deal.buyer_cancel_photo_url || deal.original_image_url) && (
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3 flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        {deal.original_image_url && (
+                          <button
+                            type="button"
+                            onClick={() => setZoomPhotoUrl(deal.original_image_url)}
+                            className="w-14 h-14 rounded-xl overflow-hidden border border-slate-200 shrink-0 cursor-pointer"
+                            title="View Original Product Photo"
+                          >
+                            <img
+                              src={deal.original_image_url}
+                              alt={deal.product_title}
+                              className="w-full h-full object-cover"
+                            />
+                          </button>
+                        )}
+                        {deal.buyer_cancel_photo_url && (
+                          <button
+                            type="button"
+                            onClick={() => setZoomPhotoUrl(deal.buyer_cancel_photo_url)}
+                            className="w-14 h-14 rounded-xl overflow-hidden border border-indigo-300 shrink-0 cursor-pointer"
+                            title="View Uploaded Inspection Photo"
+                          >
+                            <img
+                              src={deal.buyer_cancel_photo_url}
+                              alt="Uploaded buyer verification preview"
+                              className="w-full h-full object-cover"
+                            />
+                          </button>
+                        )}
+                        <div className="text-xs">
+                          <p className="font-bold text-slate-800">
+                            {deal.buyer_cancel_photo_url ? 'Uploaded Product Photo' : 'Seller Catalog Photo'}
+                          </p>
+                          <p className="text-[11px] text-slate-500">
+                            {deal.buyer_cancel_photo_url
+                              ? 'Shared with Seller for verification (click thumbnail to zoom)'
+                              : 'Original seller listing preview'}
+                          </p>
+                        </div>
+                      </div>
+                      {deal.buyer_cancel_photo_url && (
+                        <span
+                          className={`px-2.5 py-1 rounded-full text-[11px] font-extrabold ${
+                            photoStatus === 'MATCHED'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : photoStatus === 'MISMATCH'
+                              ? 'bg-rose-100 text-rose-800'
+                              : 'bg-amber-100 text-amber-800'
+                          }`}
+                        >
+                          {photoStatus === 'MATCHED'
+                            ? `✅ Verified Match${photoConf !== undefined ? ` (${photoConf}%)` : ''}`
+                            : photoStatus === 'MISMATCH'
+                            ? `🚨 Mismatch${photoConf !== undefined ? ` (${photoConf}%)` : ''}`
+                            : '⚠️ Seller Review Pending'}
+                        </span>
+                      )}
+                    </div>
+                  )}
+
                   {/* Latest updates */}
                   {lastNotes.length > 0 && (
                     <div className="space-y-1.5">
@@ -193,7 +337,7 @@ export default function CancelledDeals() {
                   )}
                 </div>
 
-                {/* Buyer 2 Options */}
+                {/* Buyer 2 Options + Optional Photo Upload */}
                 {isClosed ? (
                   <div className="rounded-2xl bg-emerald-50 border border-emerald-200 px-4 py-3 text-xs font-bold text-emerald-900 flex items-center gap-2">
                     <CheckCircleIcon className="w-5 h-5 text-emerald-600 shrink-0" aria-hidden="true" />
@@ -202,8 +346,71 @@ export default function CancelledDeals() {
                 ) : (
                   <div className="space-y-3 pt-2 border-t border-slate-100">
                     <p className="text-xs font-bold text-slate-600 uppercase tracking-wider">
-                      Buyer 2 Options (Choose What Helps You Best):
+                      Buyer Options (Choose What Helps You Best):
                     </p>
+
+                    {/* Optional Buyer Photo Upload for Seller Verification */}
+                    <div className="rounded-2xl border border-dashed border-indigo-300 bg-indigo-50/40 p-3 space-y-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <label
+                          htmlFor={`deal-photo-${deal.id}`}
+                          className="text-xs font-bold text-slate-800 inline-flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <CameraIcon className="w-4 h-4 text-indigo-600" aria-hidden="true" />
+                          <span>Upload Photo (Optional — sent to Seller for verification)</span>
+                        </label>
+                        {selectedPhoto && (
+                          <button
+                            type="button"
+                            onClick={() => clearDealPhoto(deal.id)}
+                            className="text-[11px] font-bold text-rose-700 hover:underline cursor-pointer"
+                          >
+                            Remove photo
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2">
+                        <input
+                          id={`deal-photo-${deal.id}`}
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => handleSelectDealPhoto(deal.id, e)}
+                          className="flex-1 min-w-[200px] text-xs text-slate-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-indigo-100 file:text-indigo-800 hover:file:bg-indigo-200 cursor-pointer"
+                        />
+                        {selectedPhoto && (
+                          <button
+                            type="button"
+                            disabled={Boolean(busyKey)}
+                            onClick={() => handleAction(deal.id, 'UPLOAD_BUYER_PHOTO')}
+                            className="px-3.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold disabled:opacity-60 cursor-pointer"
+                          >
+                            {busyKey === `${deal.id}-UPLOAD_BUYER_PHOTO`
+                              ? 'Uploading...'
+                              : 'Upload Photo for Seller Check'}
+                          </button>
+                        )}
+                      </div>
+
+                      {selectedPreview && (
+                        <div className="flex items-center gap-3 pt-1">
+                          <img
+                            src={selectedPreview}
+                            alt="Selected buyer verification upload"
+                            className="w-14 h-14 rounded-lg object-cover border border-slate-200"
+                          />
+                          <div className="text-[11px] text-slate-600">
+                            <p className="font-semibold text-slate-800 truncate max-w-[240px]">
+                              {selectedPhoto?.name}
+                            </p>
+                            <p className="text-emerald-700 font-medium">
+                              Ready to send to the Seller (standalone or with any option below).
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
                     <div className="flex flex-wrap gap-2.5">
                       {/* Option 1A: Claim Discount Deal Now */}
                       <button
@@ -234,7 +441,7 @@ export default function CancelledDeals() {
                         <span>Ask Seller for Edit / Extra Discount</span>
                       </button>
 
-                      {/* Option 2: Wapsi Backup Unit Request */}
+                      {/* Option 2: Fresh Backup Unit Request */}
                       <button
                         type="button"
                         disabled={Boolean(busyKey)}
@@ -295,6 +502,36 @@ export default function CancelledDeals() {
               </article>
             );
           })}
+        </div>
+      )}
+
+      {zoomPhotoUrl && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 bg-slate-950/80 flex items-center justify-center p-4"
+          onClick={() => setZoomPhotoUrl('')}
+        >
+          <div
+            className="max-w-2xl w-full bg-white rounded-2xl p-3 space-y-2 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-1">
+              <span className="text-xs font-bold text-slate-800">Product Photo Preview</span>
+              <button
+                type="button"
+                onClick={() => setZoomPhotoUrl('')}
+                className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-bold text-slate-800 cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+            <img
+              src={zoomPhotoUrl}
+              alt="Enlarged product photo"
+              className="w-full max-h-[75vh] object-contain rounded-xl bg-slate-50"
+            />
+          </div>
         </div>
       )}
     </div>

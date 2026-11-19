@@ -1169,9 +1169,19 @@ def buyer_act_on_cancelled_deal(
     custom_note: str = '',
     offered_price: float | None = None,
     metrics: SellerShieldMetrics | None = None,
+    photo_file=None,
 ) -> dict:
-    """Buyer chooses Option 1 (Claim Discount / Ask Edit) or Option 2 (Request Backup / Return to Backup)."""
+    """Buyer chooses Option 1 (Claim Discount / Ask Edit), Option 2 (Request Backup), or uploads an inspection photo."""
     opt = str(option_type or '').upper().strip()
+    if opt not in ('CLAIM_DISCOUNT_DEAL', 'REQUEST_EDIT_DISCOUNT', 'REQUEST_BACKUP_UNIT', 'UPLOAD_BUYER_PHOTO'):
+        raise ValueError(
+            'option_type must be CLAIM_DISCOUNT_DEAL, REQUEST_EDIT_DISCOUNT, REQUEST_BACKUP_UNIT, or UPLOAD_BUYER_PHOTO.'
+        )
+    if opt == 'CLAIM_DISCOUNT_DEAL' and recovery.status == 'DEAL_CLOSED':
+        raise ValueError('This cancelled deal was already claimed by another buyer.')
+    if opt == 'UPLOAD_BUYER_PHOTO' and photo_file is None:
+        raise ValueError('Please select a photo to upload.')
+
     now = _utc_now_iso()
     buyer_name = buyer_user.get_full_name().strip() or buyer_user.username
     buyer_profile = getattr(buyer_user, 'profile', None)
@@ -1179,9 +1189,100 @@ def buyer_act_on_cancelled_deal(
     buyer_phone = getattr(buyer_profile, 'phone', '') or '+92-300-1234567'
     history = list(recovery.chat_history or [])
 
+    photo_verdict = None
+    photo_conf = None
+    if photo_file is not None:
+        photo_bytes, photo_data_uri = prepare_cancel_photo(photo_file)
+        prod_obj = (
+            Product.objects.filter(id=recovery.product_id).select_related('category', 'seller').first()
+            if recovery.product_id
+            else None
+        )
+        verification = verify_cancelled_product_photo(
+            buyer_photo_bytes=photo_bytes,
+            product=prod_obj,
+            product_title=recovery.product_title,
+            cancel_reason=recovery.cancel_reason,
+        )
+        photo_verdict = verification.get('verdict', 'SUSPICIOUS')
+        photo_conf = verification.get('confidence_score', 0)
+        summary_msg = (
+            verification.get('summary')
+            or verification.get('roman_urdu_summary')
+            or verification.get('visual_comparison', '')
+        )
+        recovery.buyer_cancel_photo_data = photo_data_uri
+        recovery.photo_verification_status = photo_verdict
+        recovery.photo_verification_result = verification
+        history.append({
+            'sender': 'AI_VISION_CHECK',
+            'verdict': photo_verdict,
+            'confidence_score': photo_conf,
+            'candidate_name': buyer_name,
+            'text': f'Buyer {buyer_name} uploaded a photo ({photo_verdict} · {photo_conf}% match): {summary_msg}',
+            'timestamp': now,
+        })
+        if metrics is not None:
+            run_id = uuid.uuid4().hex[:12]
+            AgentExecutionLog.objects.create(
+                metrics=metrics,
+                run_id=run_id,
+                trigger_event='MARKETPLACE_BUYER_PHOTO_CHECK',
+                agent_name='return_fraud_vision_agent',
+                llm_engine='automated-agent',
+                engine_mode='live',
+                action=(
+                    f'Buyer {buyer_name} uploaded photo on #{recovery.order_number} ({recovery.product_title}): '
+                    f'{photo_verdict} ({photo_conf}% confidence).'
+                ),
+                money_impact=recovery.original_price if photo_verdict == 'MISMATCH' else Decimal('0.00'),
+                handoff_to='profit_bleed_auditor_agent' if photo_verdict == 'MISMATCH' else 'intransit_rto_rerouter_agent',
+                is_autonomous=True,
+                details={k: v for k, v in verification.items() if k != 'engine_used'},
+            )
+            if photo_verdict == 'MISMATCH':
+                PendingApprovalAction.objects.create(
+                    metrics=metrics,
+                    run_id=run_id,
+                    title=f'Buyer Deal Photo Mismatch on #{recovery.order_number}',
+                    agent_name='return_fraud_vision_agent',
+                    action_type='FRAUD_CLAIM',
+                    description=verification.get('seller_recommendation')
+                    or 'Uploaded buyer photo did not match original product listing.',
+                    dollar_impact=recovery.original_price,
+                    payload={
+                        'recovery_id': recovery.id,
+                        'order_number': recovery.order_number,
+                        'verdict': photo_verdict,
+                        'confidence_score': photo_conf,
+                    },
+                )
+
+    if opt == 'UPLOAD_BUYER_PHOTO':
+        note_clean = (custom_note or '').strip()
+        if note_clean:
+            history.append({
+                'sender': 'NEXT_CUSTOMER',
+                'candidate_name': buyer_name,
+                'text': f'[Buyer Photo Note] {note_clean}',
+                'timestamp': now,
+            })
+        recovery.chat_history = history
+        recovery.save(
+            update_fields=[
+                'buyer_cancel_photo_data',
+                'photo_verification_status',
+                'photo_verification_result',
+                'chat_history',
+                'updated_at',
+            ]
+        )
+        return {
+            'message': f'Photo uploaded and sent to the Seller for verification ({photo_verdict} · {photo_conf}%)!',
+            'recovery': serialize_recovery(recovery),
+        }
+
     if opt == 'CLAIM_DISCOUNT_DEAL':
-        if recovery.status == 'DEAL_CLOSED':
-            raise ValueError('This cancelled deal was already claimed by another buyer.')
         agreed = float(recovery.ai_recommended_deal_price)
         agreed_dec = _money_dec(agreed)
         with transaction.atomic():

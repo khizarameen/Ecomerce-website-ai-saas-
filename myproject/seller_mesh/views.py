@@ -682,6 +682,11 @@ class BuyerRescueDealActionView(APIView):
             )
         recovery = get_object_or_404(CancelledOrderRecovery, pk=pk)
         raw_price = request.data.get('offered_price')
+        photo_file = (
+            request.FILES.get('photo')
+            or request.FILES.get('buyer_photo')
+            or request.FILES.get('cancel_photo')
+        )
         seller_owner = (
             User.objects.filter(username=recovery.seller_username).first()
             if recovery.seller_username
@@ -696,6 +701,7 @@ class BuyerRescueDealActionView(APIView):
                 custom_note=str(request.data.get('custom_note') or ''),
                 offered_price=float(raw_price) if raw_price not in (None, '') else None,
                 metrics=metrics,
+                photo_file=photo_file,
             )
         except ValueError as err:
             return Response({'error': str(err)}, status=status.HTTP_400_BAD_REQUEST)

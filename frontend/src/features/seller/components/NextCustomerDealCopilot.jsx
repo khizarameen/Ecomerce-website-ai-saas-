@@ -503,7 +503,7 @@ export default function NextCustomerDealCopilot({
                     ? '🚨 Product Mismatch / Switch Alert'
                     : vStatus === 'SUSPICIOUS'
                     ? '⚠️ Needs Manual Seller Review'
-                    : '📷 No Cancel Photo Uploaded Yet';
+                    : '📷 No Buyer Photo Uploaded Yet';
 
                 return (
                   <div className={`rounded-2xl border p-4 space-y-3 ${bannerClass}`}>
@@ -601,12 +601,12 @@ export default function NextCustomerDealCopilot({
                         )}
                         <div className="min-w-0 text-xs">
                           <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                            Buyer Uploaded Cancel Photo
+                            Buyer Uploaded Photo
                           </p>
                           <p className="font-bold text-slate-900 truncate">
                             {vResult.detected_item ||
                               (activeRecovery.buyer_cancel_photo_url
-                                ? 'Uploaded by buyer during cancel'
+                                ? 'Uploaded by buyer'
                                 : 'Buyer did not attach a photo')}
                           </p>
                           <p className="text-[11px] text-slate-600 line-clamp-2">
